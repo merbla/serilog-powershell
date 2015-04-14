@@ -1,3 +1,55 @@
+function ToSerilogSplunk{
+   [CmdletBinding(DefaultParameterSetName = 'FromPipeline')]
+   param(
+     [Parameter(ValueFromPipeline = $true, ParameterSetName = 'FromPipeline')]
+     [object] $InputObject
+   
+   )
+ 
+   begin
+   {  
+      
+      Write-Verbose "Playing Around with PowerShell and Serilog to ToSerilogSplunk"
+
+      function LoadSerilog{
+        $path = "C:\Code\serilog-powershell\lib\Serilog.dll"
+        $fullpath = "C:\Code\serilog-powershell\lib\Serilog.FullNetFx.dll"
+
+        [System.Reflection.Assembly]::LoadFile($path)
+        [System.Reflection.Assembly]::LoadFile($fullpath)
+
+        [System.Reflection.Assembly]::LoadFile("C:\Code\serilog-powershell\lib\Splunk.Logging.Common.dll")
+        [System.Reflection.Assembly]::LoadFile("C:\Code\serilog-powershell\lib\Splunk.Client.dll")
+        [System.Reflection.Assembly]::LoadFile("C:\Code\serilog-powershell\lib\Serilog.Sinks.Splunk.FullNetFx.dll")
+
+        $config = New-Object -TypeName "Serilog.LoggerConfiguration"
+        
+        [Serilog.LoggerConfigurationSplunkExtensions]::SplunkViaTcp($config.WriteTo,"127.0.0.1" ,10001, [Serilog.Events.LogEventLevel]::Verbose, $null)
+#"127.0.0.1", 10001)
+        $log = $config.CreateLogger()
+        [Serilog.Log]::Logger = $log
+
+        return $log
+      }
+
+      function Cleanup {
+        $oldLog = [Serilog.Log]::Logger 
+        $oldLog.Dispose()
+      } 
+
+     $log = LoadSerilog
+  
+   }
+ 
+  process{
+        [Serilog.Log]::Information("{0}", $InputObject)
+  }
+  end { 
+    Cleanup 
+  } 
+}
+
+
 function ToSerilogFile
 {
    [CmdletBinding(DefaultParameterSetName = 'FromPipeline')]
