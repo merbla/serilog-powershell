@@ -1,105 +1,118 @@
-
-
-
-function Select-WriteHost
+function ToSerilogFile
 {
    [CmdletBinding(DefaultParameterSetName = 'FromPipeline')]
    param(
      [Parameter(ValueFromPipeline = $true, ParameterSetName = 'FromPipeline')]
      [object] $InputObject,
- 
-     [Parameter(Mandatory = $true, ParameterSetName = 'FromScriptblock', Position = 0)]
-     [ScriptBlock] $ScriptBlock,
- 
-     [switch] $Quiet
+    [Parameter(ValueFromPipeline = $false, Mandatory = $true)]
+     [string] $logPath
    )
  
    begin
-   {
-     function Cleanup
-     {
-       # clear out our proxy version of write-host
-       remove-item function:write-host -ea 0
-     }
- 
-     function ReplaceWriteHost([switch] $Quiet, [string] $Scope)
-     {
-         # create a proxy for write-host
-         $metaData = New-Object System.Management.Automation.CommandMetaData (Get-Command 'Microsoft.PowerShell.Utility\Write-Host')
-         $proxy = [System.Management.Automation.ProxyCommand]::create($metaData)
- 
-         # change its behavior
-         $content = if($quiet)
-                    {
-                       # in quiet mode, whack the entire function body, simply pass input directly to the pipeline
-                       $proxy -replace '(?s)\bbegin\b.+', '$Object'
-                    }
-                    else
-                    {
-                       # in noisy mode, pass input to the pipeline, but allow real write-host to process as well
-                       $proxy -replace '($steppablePipeline.Process)', '$Object; $1'
-                    }  
- 
-         # load our version into the specified scope
-         Invoke-Expression "function ${scope}:Write-Host { $content }"
-     }
+   {  
+      
+      Write-Verbose "Playing Around with PowerShell and Serilog to a file"
 
-     function LoadSerilog{
-
-        $scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
-        $serilogFilePath = "\lib\Serilog.dll"
+      function LoadSerilog{
         $path = "C:\Code\serilog-powershell\lib\Serilog.dll"
-        echo $path
+        $fullpath = "C:\Code\serilog-powershell\lib\Serilog.FullNetFx.dll"
 
         [System.Reflection.Assembly]::LoadFile($path)
+        [System.Reflection.Assembly]::LoadFile($fullpath)
 
-    #var log = new LoggerConfiguration()
-        #.WriteTo.File("log.txt")
-        #.CreateLogger();
+        $config = New-Object -TypeName "Serilog.LoggerConfiguration"
+         
+        $fileSize = 1073741824
+        $outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] {Message}{NewLine}{Exception}"
+        [Serilog.LoggerConfigurationFullNetFxExtensions]::File($config.WriteTo, $logPath, [Serilog.Events.LogEventLevel]::Verbose, $outputTemplate, $null, $fileSize)
+
+        $log = $config.CreateLogger()
+        [Serilog.Log]::Logger = $log
+
+        return $log
+      }
+
+      function Cleanup {
+        $oldLog = [Serilog.Log]::Logger 
+        $oldLog.Dispose()
+      } 
+
+     $log = LoadSerilog
+  
+   }
+ 
+  process{
+        [Serilog.Log]::Information("{0}", $InputObject)
+  }
+  end { 
+    Cleanup 
+  } 
+}
+
+function ToSerilog
+{
+   [CmdletBinding(DefaultParameterSetName = 'FromPipeline')]
+   param(
+     [Parameter(ValueFromPipeline = $true, ParameterSetName = 'FromPipeline')]
+     [object] $InputObject
+   )
+ 
+   begin
+   {  
+      
+      Write-Verbose "Playing Around with PowerShell and Serilog"
+
+      function LoadSerilog{
+        $path = "C:\Code\serilog-powershell\lib\Serilog.dll"
+        $fullpath = "C:\Code\serilog-powershell\lib\Serilog.FullNetFx.dll"
+
+        [System.Reflection.Assembly]::LoadFile($path)
+        [System.Reflection.Assembly]::LoadFile($fullpath)
+
+        $config = New-Object -TypeName "Serilog.LoggerConfiguration"
+        #$read = $config.ReadFrom
+        $logPath = "C:\Temp\Serilog.log"
+
+        # public static Serilog.LoggerConfiguration File(this Serilog.Configuration.LoggerSinkConfiguration sinkConfiguration, 
+        #   string path, [Serilog.Events.LogEventLevel restrictedToMinimumLevel = Serilog.Events.LogEventLevel.Verbose], 
+        #   [string outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] {Message}{NewLine}{Exception}"], 
+        #   [System.IFormatProvider formatProvider = null], [long? fileSizeLimitBytes = 1073741824])
+        $fileSize = 1073741824
+        $outputTemplate = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] {Message}{NewLine}{Exception}"
+        [Serilog.LoggerConfigurationFullNetFxExtensions]::File($config.WriteTo, $logPath, [Serilog.Events.LogEventLevel]::Verbose, $outputTemplate, $null, $fileSize)
 
 
+        $log = $config.CreateLogger()
+        [Serilog.Log]::Logger = $log
 
-    }
+        return $log
+      }
+
+      function Cleanup {
+        $oldLog = [Serilog.Log]::Logger 
+        $oldLog.Dispose()
+      }
 
     function Log {
+       param($log, $data)
+
+       $log.Information("{0}", $data)
       
     }
-
-     Cleanup
-     LoadSerilog
- 
-     # if we are running at the end of a pipeline, need to immediately inject our version
-     #    into global scope, so that everybody else in the pipeline uses it.
-     #    This works great, but dangerous if we don't clean up properly.
-     if($pscmdlet.ParameterSetName -eq 'FromPipeline')
-     {
-        ReplaceWriteHost -Quiet:$quiet -Scope 'global'
-     }
+     
+     $log = LoadSerilog
+  
    }
  
    process
    {
-      # if a scriptblock was passed to us, then we can declare
-      #   our version as local scope and let the runtime take it out
-      #   of scope for us.  Much safer, but it won't work in the pipeline scenario.
-      #   The scriptblock will inherit our version automatically as it's in a child scope.
-      if($pscmdlet.ParameterSetName -eq 'FromScriptBlock')
-      {
-        . ReplaceWriteHost -Quiet:$quiet -Scope 'local'
-        & $scriptblock
-      }
-      else
-      {
+        [Serilog.Log]::Information("{0}", $InputObject)
 
-        Log - $InputObject
-
-         # in pipeline scenario, just pass input along
-         $InputObject
-      }
    }
  
    end
    {
-      Cleanup
+
+      Cleanup $log
    }  
 }
