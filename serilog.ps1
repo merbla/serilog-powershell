@@ -1,11 +1,10 @@
 #TODO: Add params for TCP
-#TODO: Add params for USP
+#TODO: Add params for UDP
 #TODO: Add params for HTTP
 
+#TODO: Choco package to get NuGet dependencies
 
-
-
-function ToSerilogSplunkViaTcp{
+function ToSplunkViaTcp{
    [CmdletBinding(DefaultParameterSetName = 'FromPipeline')]
    param(
      [Parameter(ValueFromPipeline = $true, ParameterSetName = 'FromPipeline')]
@@ -13,15 +12,17 @@ function ToSerilogSplunkViaTcp{
      [Parameter(Mandatory = $true)]
      [string] $splunkHost,
      [Parameter(Mandatory = $true)]
-     [int] $port
+     [int] $port,
+     [Serilog.Events.LogEventLevel] $level = [Serilog.Events.LogEventLevel]::Information
    )
  
    begin
    {  
       
-      Write-Verbose "Playing Around with PowerShell and Serilog to ToSerilogSplunk"
+      Write-Verbose "Playing Around with PowerShell and Serilog to ToSplunkViaTcp"
 
       function LoadSerilog{
+
         $path = "C:\Code\serilog-powershell\lib\Serilog.dll"
         $fullpath = "C:\Code\serilog-powershell\lib\Serilog.FullNetFx.dll"
 
@@ -34,8 +35,7 @@ function ToSerilogSplunkViaTcp{
 
         $config = New-Object -TypeName "Serilog.LoggerConfiguration"
         
-        [Serilog.LoggerConfigurationSplunkExtensions]::SplunkViaTcp($config.WriteTo, $splunkHost ,$port, [Serilog.Events.LogEventLevel]::Verbose, $null)
-#"127.0.0.1", 10001)
+        [Serilog.LoggerConfigurationSplunkExtensions]::SplunkViaTcp($config.WriteTo, $splunkHost ,$port, $level, $null)
         $log = $config.CreateLogger()
         [Serilog.Log]::Logger = $log
 
@@ -52,6 +52,9 @@ function ToSerilogSplunkViaTcp{
    }
  
   process{
+
+        #TODO: Switch??
+
         [Serilog.Log]::Information("{0}", $InputObject)
   }
   end { 
