@@ -1,22 +1,23 @@
-﻿using System.Management.Automation;
+﻿using System.Collections.Generic;
+using System.Management.Automation;
 
 namespace Serilog.PowerShell
 {
-    [Cmdlet(VerbsCommunications.Send, "ToFile")]
-    public class SendToFile : PSCmdlet
+    [Cmdlet(VerbsCommunications.Send, "ToSerilog")]
+    public class SendToSerilog : PSCmdlet
     {
         [Parameter(Position = 1, Mandatory = true,
             ValueFromPipelineByPropertyName = true,
             HelpMessage = "The path of the file to write to")]
         [ValidateNotNullOrEmpty]
-        public string FilePath
+        public Dictionary<string,string> Settings
         {
             get;
             set;
         }
 
-        [Parameter(ValueFromPipeline = true, 
-            ParameterSetName = "FromPipeline", 
+        [Parameter(ValueFromPipeline = true,
+            ParameterSetName = "FromPipeline",
             Mandatory = true)]
         [ValidateNotNullOrEmpty]
         public object InputObject { get; set; }
@@ -26,7 +27,7 @@ namespace Serilog.PowerShell
             base.BeginProcessing();
 
             Log.Logger = new LoggerConfiguration()
-                .WriteTo.File(FilePath)
+                .ReadFrom.KeyValuePairs(Settings)
                 .CreateLogger();
         }
 
@@ -40,9 +41,7 @@ namespace Serilog.PowerShell
         protected override void EndProcessing()
         {
             base.EndProcessing();
-
-          //TODO: Dispose??
-          //  Log.Logger = null;
+             
         }
 
 

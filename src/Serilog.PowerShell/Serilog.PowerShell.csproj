@@ -59,6 +59,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="SendToFile.cs" />
+    <Compile Include="SendToSerilog.cs" />
     <Compile Include="SendToSplunk.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
